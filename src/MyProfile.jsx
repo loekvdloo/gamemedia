@@ -8,9 +8,10 @@ import {
   addDoc,
   setDoc,
   getDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./config/firebase";
-import { getAuth } from "firebase/auth";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { supabase } from "./config/supabase";
 
 function MyProfile() {
@@ -20,6 +21,10 @@ function MyProfile() {
   const [fileInputKey, setFileInputKey] = useState(Date.now());
   const [profileImage, setProfileImage] = useState(null);
   const [userName, setUserName] = useState("");
+  const [friendsList, setFriendsList] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [privateProfile, setPrivateProfile] = useState(false);
 
   const [editTaskId, setEditTaskId] = useState(null);
   const [editTaskName, setEditTaskName] = useState("");
@@ -33,6 +38,59 @@ function MyProfile() {
   const taskCollectionRef = collection(db, "Task");
   const userProfileDocRef = doc(db, "UserProfiles", user?.uid);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      const userRef = doc(db, "Users", user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        setUserName(data.name || "Onbekende gebruiker");
+        setProfileImage(data.profileImageUrl || null);
+        setPrivateProfile(data.private || false);
+
+        // Vrienden ophalen
+        const friends = data.friends || [];
+        if (friends.length > 0) {
+          const friendDocs = await Promise.all(
+            friends.map((uid) => getDoc(doc(db, "Users", uid)))
+          );
+          setFriendsList(
+            friendDocs.filter((d) => d.exists()).map((d) => d.data())
+          );
+        } else {
+          setFriendsList([]);
+        }
+
+        // Verzoeken ophalen
+        const requests = data.friendRequests || [];
+        if (requests.length > 0) {
+          const requestDocs = await Promise.all(
+            requests.map((uid) => getDoc(doc(db, "Users", uid)))
+          );
+          setFriendRequests(
+            requestDocs
+              .filter((d) => d.exists())
+              .map((d) => ({ ...d.data(), uid: d.id }))
+          );
+        } else {
+          setFriendRequests([]);
+        }
+      } else {
+        setUserName(user.displayName || "Onbekende gebruiker");
+      }
+      setLoading(false);
+    };
+    fetchProfile();
+  }, [user]);
+
   const getTasks = async () => {
     try {
       const data = await getDocs(taskCollectionRef);
@@ -43,27 +101,6 @@ function MyProfile() {
       console.error("Error fetching tasks:", error.message);
     }
   };
-
-  const getUserName = async () => {
-    try {
-      const docSnap = await getDoc(userProfileDocRef);
-      if (docSnap.exists()) {
-        setUserName(docSnap.data().name || "Onbekende gebruiker");
-        setProfileImage(docSnap.data().profileImageUrl || null);
-      } else {
-        setUserName(user.displayName || "Onbekende gebruiker");
-      }
-    } catch (error) {
-      console.error("Error fetching user name:", error.message);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      getTasks();
-      getUserName();
-    }
-  }, [user]);
 
   const uploadImageToSupabase = async (file) => {
     const fileExt = file.name.split(".").pop();
@@ -88,7 +125,11 @@ function MyProfile() {
     const imageUrl = await uploadImageToSupabase(file);
     if (imageUrl) {
       try {
-        await setDoc(userProfileDocRef, { profileImageUrl: imageUrl }, { merge: true });
+        await setDoc(
+          userProfileDocRef,
+          { profileImageUrl: imageUrl },
+          { merge: true }
+        );
         setProfileImage(imageUrl);
       } catch (error) {
         console.error("Error updating profile image:", error.message);
@@ -170,11 +211,65 @@ function MyProfile() {
     }
   };
 
+  const handlePrivateChange = async (e) => {
+    const newValue = e.target.checked;
+    setPrivateProfile(newValue);
+    if (user) {
+      const userRef = doc(db, "Users", user.uid);
+      await updateDoc(userRef, { private: newValue });
+    }
+  };
+
+  // Verzoek accepteren
+  const handleAcceptRequest = async (requesterUid) => {
+    if (!user) return;
+    try {
+      const myRef = doc(db, "Users", user.uid);
+      const requesterRef = doc(db, "Users", requesterUid);
+
+      const mySnap = await getDoc(myRef);
+      const requesterSnap = await getDoc(requesterRef);
+
+      if (!mySnap.exists() || !requesterSnap.exists()) {
+        alert("Gebruiker niet gevonden!");
+        return;
+      }
+
+      const myData = mySnap.data();
+      const requesterData = requesterSnap.data();
+
+      // Voeg elkaar toe als vriend
+      const batch = writeBatch(db);
+      batch.update(myRef, {
+        friends: [...(myData.friends || []), requesterUid],
+        friendRequests: (myData.friendRequests || []).filter(
+          (uid) => uid !== requesterUid
+        ),
+      });
+      batch.update(requesterRef, {
+        friends: [...(requesterData.friends || []), user.uid],
+      });
+      await batch.commit();
+
+      // Refresh lists
+      setFriendsList((prev) => [...prev, requesterData]);
+      setFriendRequests((prev) => prev.filter((r) => r.uid !== requesterUid));
+      alert("Vriendschapsverzoek geaccepteerd!");
+    } catch (error) {
+      alert("Fout bij accepteren verzoek.");
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (!userName) return <div>Geen profiel gevonden.</div>;
+
   return (
     <div>
       <h2>Jouw profiel</h2>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <p><strong>Naam:</strong> {userName}</p>
+        <p>
+          <strong>Naam:</strong> {userName}
+        </p>
         {profileImage ? (
           <>
             <img
@@ -186,7 +281,7 @@ function MyProfile() {
                 border: "5px solid white",
                 borderRadius: "50%",
                 objectFit: "cover",
-            }}
+              }}
             />
             <div style={{ marginTop: 10 }}>
               <button onClick={() => fileInputRef.current.click()}>
@@ -216,6 +311,15 @@ function MyProfile() {
           </>
         )}
       </div>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={privateProfile}
+          onChange={handlePrivateChange}
+        />
+        Mijn profiel is privé (anderen moeten verzoek sturen)
+      </label>
 
       <h2>Jouw berichten</h2>
 
@@ -297,6 +401,35 @@ function MyProfile() {
           )}
         </div>
       ))}
+
+      <h3>Mijn Vrienden:</h3>
+      {friendsList.length > 0 ? (
+        <ul>
+          {friendsList.map((friend, idx) => (
+            <li key={idx}>
+              {friend.name} ({friend.email})
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Je hebt nog geen vrienden.</p>
+      )}
+
+      <h3>Vriendschapsverzoeken:</h3>
+      {friendRequests.length > 0 ? (
+        <ul>
+          {friendRequests.map((req, idx) => (
+            <li key={idx}>
+              {req.name} ({req.email}){" "}
+              <button onClick={() => handleAcceptRequest(req.uid)}>
+                Accepteer
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Geen openstaande verzoeken.</p>
+      )}
     </div>
   );
 }

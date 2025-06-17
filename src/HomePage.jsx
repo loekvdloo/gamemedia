@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { getDocs, updateDoc, collection, doc, getDoc } from "firebase/firestore";
+import { getDocs, updateDoc, collection, doc, getDoc, writeBatch, arrayUnion } from "firebase/firestore";
 import { db } from "./config/firebase";
 import { getAuth } from "firebase/auth";
-import './GameMedia.css'; // Import the GameMedia.css file
+import './GameMedia.css';
 
 function HomePage() {
   const [taskList, setTaskList] = useState([]);
@@ -11,6 +11,10 @@ function HomePage() {
   const [mostLikedPost, setMostLikedPost] = useState(null);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [friendsList, setFriendsList] = useState([]);
+  const [myProfile, setMyProfile] = useState(false); // Nieuw
+  const [showAddFriendPopup, setShowAddFriendPopup] = useState(false);
+  const [pendingFriend, setPendingFriend] = useState(null);
   const auth = getAuth();
   const user = auth.currentUser;
 
@@ -19,71 +23,118 @@ function HomePage() {
       const data = await getDocs(collection(db, "Task"));
       const tasks = data.docs
         .map((doc) => ({ ...doc.data(), id: doc.id }))
-        .filter((task) => !task.private); // Exclude private posts
-      tasks.sort((a, b) => b.likes - a.likes); // Sort by likes in descending order
+        .filter((task) => !task.private);
+      tasks.sort((a, b) => b.likes - a.likes);
       setTaskList(tasks);
-      setFilteredTaskList(tasks); // Initialize filtered list
-
-      // Set the most liked post
+      setFilteredTaskList(tasks);
       if (tasks.length > 0) {
-        setMostLikedPost(tasks[0]); // The first post after sorting is the most liked
+        setMostLikedPost(tasks[0]);
       }
     };
-
     getTasks();
   }, []);
 
-  const handleAddFriend = async (friendUid) => {
+  // Vriend toevoegen of verzoek sturen
+  const handleAddFriend = async (friendUid, friendIsPrivate) => {
     if (!friendUid) {
       alert("Geen geldige gebruiker geselecteerd!");
       return;
     }
+    if (friendUid === user.uid) {
+      alert("Je kunt jezelf niet toevoegen als vriend!");
+      return;
+    }
 
-    const userDoc = doc(db, "Users", user.uid); // Document van de huidige gebruiker
     try {
-      const userSnapshot = await getDoc(userDoc);
+      const myRef = doc(db, "Users", user.uid);
+      const friendRef = doc(db, "Users", friendUid);
 
-      if (!userSnapshot.exists()) {
-        alert("Gebruikersdocument niet gevonden!");
+      const mySnap = await getDoc(myRef);
+      const friendSnap = await getDoc(friendRef);
+
+      if (!mySnap.exists() || !friendSnap.exists()) {
+        alert("Gebruiker niet gevonden!");
         return;
       }
 
-      const userData = userSnapshot.data();
+      const myData = mySnap.data();
+      const friendData = friendSnap.data();
 
-      // Controleer of de vriend al is toegevoegd
-      if (userData.friends?.includes(friendUid)) {
-        alert("Deze gebruiker is al een vriend!");
+      // Controleer of je al vrienden bent
+      if ((myData.friends || []).includes(friendUid)) {
+        alert("Jullie zijn al vrienden!");
         return;
       }
 
-      // Voeg de vriend toe aan de 'friends'-array
-      const updatedFriends = [...(userData.friends || []), friendUid];
-      await updateDoc(userDoc, { friends: updatedFriends });
-
-      alert("Vriend succesvol toegevoegd!");
+      if (friendIsPrivate) {
+        // Stuur verzoek
+        await updateDoc(friendRef, {
+          friendRequests: arrayUnion(user.uid),
+        });
+        alert("Vriendschapsverzoek verstuurd! Wacht tot deze geaccepteerd wordt.");
+      } else {
+        // Direct vrienden worden
+        const batch = writeBatch(db);
+        batch.update(myRef, {
+          friends: arrayUnion(friendUid),
+        });
+        batch.update(friendRef, {
+          friends: arrayUnion(user.uid),
+        });
+        await batch.commit();
+        alert("Jullie zijn nu vrienden!");
+        // Refresh vriendenlijst als je je eigen profiel bekijkt
+        if (myProfile) {
+          fetchFriends(user.uid);
+        }
+      }
     } catch (error) {
-      console.error("Error bij het toevoegen van vriend:", error.message);
-      alert("Er is een fout opgetreden bij het toevoegen van de vriend.");
+      console.error("Error bij toevoegen vriend:", error.message);
+      alert("Er is een fout opgetreden.");
     }
   };
 
+  // Haal vrienden op voor profiel
+  const fetchFriends = async (uid) => {
+    const userDocRef = doc(db, "Users", uid);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      if (userData.friends && userData.friends.length > 0) {
+        const friendPromises = userData.friends.map((friendUid) =>
+          getDoc(doc(db, "Users", friendUid))
+        );
+        const friendSnaps = await Promise.all(friendPromises);
+        setFriendsList(friendSnaps.filter(snap => snap.exists()).map(snap => snap.data()));
+      } else {
+        setFriendsList([]);
+      }
+    }
+  };
+
+  // Profiel openen
   const handleProfileClick = async (userId) => {
-    console.log("Fetching profile for userId:", userId); // Controleer de userId
+    setShowProfilePopup(true);
+    setSelectedProfile(null);
+    setFriendsList([]);
+    setMyProfile(userId === user.uid);
 
     try {
-      const userDoc = doc(db, "Users", userId);
-      const userSnapshot = await getDoc(userDoc);
+      const userDocRef = doc(db, "Users", userId);
+      const userSnap = await getDoc(userDocRef);
 
-      if (userSnapshot.exists()) {
-        console.log("Profile data:", userSnapshot.data()); // Controleer de profielgegevens
-        setSelectedProfile(userSnapshot.data());
-        setShowProfilePopup(true);
+      if (userSnap.exists()) {
+        const profileData = userSnap.data();
+        setSelectedProfile({ ...profileData, uid: userId });
+        if (userId === user.uid) {
+          // Alleen op je eigen profiel vriendenlijst tonen
+          fetchFriends(userId);
+        }
       } else {
-        console.error("Profiel niet gevonden voor userId:", userId);
         alert("Profiel niet gevonden!");
       }
     } catch (error) {
-      console.error("Error fetching profile:", error.message);
+      alert("Fout bij ophalen profiel.");
     }
   };
 
@@ -102,7 +153,7 @@ function HomePage() {
 
   const handleLike = async (taskId, currentLikes, likedBy) => {
     if (likedBy?.includes(user.uid)) {
-      alert("Je hebt deze post al geliked!");
+      alert("Je hebt deze post al geliket!");
       return;
     }
 
@@ -200,6 +251,20 @@ function HomePage() {
     }
   };
 
+  // Nieuwe functie voor het openen van de vriend toevoegen popup
+  const handleAddFriendPopup = async (friendUid) => {
+    // Haal het profiel op van de gebruiker die je wilt toevoegen
+    const friendRef = doc(db, "Users", friendUid);
+    const friendSnap = await getDoc(friendRef);
+    if (friendSnap.exists()) {
+      const friendData = friendSnap.data();
+      setPendingFriend({ uid: friendUid, name: friendData.name, private: friendData.private });
+      setShowAddFriendPopup(true);
+    } else {
+      alert("Gebruiker niet gevonden!");
+    }
+  };
+
   return (
     <div>
       <header className="header">
@@ -212,7 +277,7 @@ function HomePage() {
           type="text"
           placeholder="Zoek op titel van post"
           value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="search-input"
         />
       </div>
@@ -244,13 +309,16 @@ function HomePage() {
             <img src={task.imageUrl} alt="taak" className="post-image" />
           )}
           <p className="post-author">
-            Geplaatst door: 
-            <button
-              onClick={() => handleProfileClick(task.userId)}
-              className="profile-button"
-            >
-              {task.userEmail} (Profiel bekijken)
-            </button>
+            Geplaatst door: {task.userEmail}
+            {/* Voeg direct de knop toe */}
+            {task.userId !== user.uid && (
+              <button
+                onClick={() => handleAddFriendPopup(task.userId)}
+                className="add-friend-button"
+              >
+                Voeg toe als vriend
+              </button>
+            )}
           </p>
           <p className="post-likes">
             Likes: {task.likes || 0}{" "}
@@ -302,17 +370,57 @@ function HomePage() {
             <h2>Profiel</h2>
             <p><strong>Naam:</strong> {selectedProfile.name}</p>
             <p><strong>Email:</strong> {selectedProfile.email}</p>
-            <button
-              onClick={() => handleAddFriend(selectedProfile.uid)}
-              className="add-friend-button"
-            >
-              Voeg toe als vriend
-            </button>
+            {/* Alleen vriendenlijst tonen op eigen profiel */}
+            {myProfile && (
+              <div className="friends-list">
+                <h3>Mijn Vrienden:</h3>
+                {friendsList.length > 0 ? (
+                  <ul>
+                    {friendsList.map((friend, index) => (
+                      <li key={index}>{friend.name}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Je hebt nog geen vrienden.</p>
+                )}
+              </div>
+            )}
+            {/* Alleen knop tonen als je NIET je eigen profiel bekijkt */}
+            {!myProfile && (
+              <button
+                onClick={() => {
+                  setPendingFriend({ uid: selectedProfile.uid, private: selectedProfile.private });
+                  setShowAddFriendPopup(true);
+                }}
+                className="add-friend-button"
+              >
+                Voeg toe als vriend
+              </button>
+            )}
             <button
               onClick={() => setShowProfilePopup(false)}
               className="close-popup-button"
             >
               Sluiten
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showAddFriendPopup && pendingFriend && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <p>Wil je {pendingFriend.name} toevoegen als vriend?</p>
+            <button
+              onClick={() => {
+                handleAddFriend(pendingFriend.uid, pendingFriend.private);
+                setShowAddFriendPopup(false);
+              }}
+            >
+              Ja, toevoegen
+            </button>
+            <button onClick={() => setShowAddFriendPopup(false)}>
+              Annuleren
             </button>
           </div>
         </div>

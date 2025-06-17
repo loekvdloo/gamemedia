@@ -1,7 +1,7 @@
 import "./App.css";
 import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 
 import LoginPage from "./LoginPage";
 import MyProfile from "./MyProfile";
@@ -27,7 +27,9 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/profile" element={<MyProfile />} />
-          <Route path="/" element={<HomePage />} />
+          <Route path="/myprofile" element={<MyProfile />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/" element={<LoginPage />} />
         </Routes>
       </div>
     </Router>

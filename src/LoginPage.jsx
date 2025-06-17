@@ -7,15 +7,38 @@ import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
+  updateProfile,
 } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "./config/firebase";
+import { useNavigate } from "react-router-dom";
+
+// Zorgt dat er altijd een user-document is
+const ensureUserDocument = async (user, name) => {
+  const userRef = doc(db, "Users", user.uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      uid: user.uid,
+      name: name || user.displayName || "",
+      email: user.email,
+      private: false,
+      friends: [],
+      friendRequests: [],
+    });
+  }
+};
 
 function LoginPage() {
   const auth = getAuth();
+  const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [register, setRegister] = useState(false);
   const [user, setUser] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -33,19 +56,29 @@ function LoginPage() {
     }
   };
 
-  const handleEmailLogin = async () => {
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await ensureUserDocument(userCredential.user);
+      navigate("/myprofile");
     } catch (error) {
+      setError("Email login mislukt. Controleer je gegevens en probeer het opnieuw.");
       console.error("Email login mislukt:", error.message);
     }
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError(null);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await userCredential.user.updateProfile({ displayName: name });
+      await updateProfile(userCredential.user, { displayName: name });
+      await ensureUserDocument(userCredential.user, name);
+      navigate("/myprofile");
     } catch (error) {
+      setError("Registratie mislukt. Probeer het opnieuw.");
       console.error("Registratie mislukt:", error.message);
     }
   };
@@ -59,50 +92,71 @@ function LoginPage() {
   };
 
   return (
-    <div style={{ padding: 20, maxWidth: 400, margin: "0 auto" }}>
-      {user ? (
-        <>
-          <h2>Welkom, {user.displayName || user.email}!</h2>
-          <button onClick={handleLogout}>Uitloggen</button>
-        </>
-      ) : (
-        <>
-          <h2>Inloggen of registreren</h2>
-          <input
-            type="text"
-            placeholder="Naam"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ display: "block", marginBottom: 10, width: "100%" }}
-          />
-          <input
-            type="email"
-            placeholder="E-mailadres"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ display: "block", marginBottom: 10, width: "100%" }}
-          />
-          <input
-            type="password"
-            placeholder="Wachtwoord"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ display: "block", marginBottom: 10, width: "100%" }}
-          />
-
-          <button onClick={handleEmailLogin} style={{ marginBottom: 10 }}>
-            Inloggen met e-mail
-          </button>
-          <button onClick={handleRegister} style={{ marginBottom: 20 }}>
-            Registreren
-          </button>
-
-          <hr />
-
-          <h3>Of log in met Google</h3>
-          <button onClick={handleGoogleLogin}>Google Login</button>
-        </>
-      )}
+    <div className="login-bg">
+      <div className="login-card">
+        {user ? (
+          <>
+            <h2>Welkom, {user.displayName || user.email}!</h2>
+            <button onClick={handleLogout}>Uitloggen</button>
+          </>
+        ) : (
+          <>
+            <h2>{register ? "Registreren" : "Inloggen"}</h2>
+            <form onSubmit={register ? handleRegister : handleEmailLogin}>
+              {register && (
+                <input
+                  type="text"
+                  placeholder="Naam"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="login-input"
+                />
+              )}
+              <input
+                type="email"
+                placeholder="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="login-input"
+              />
+              <input
+                type="password"
+                placeholder="Wachtwoord"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="login-input"
+              />
+              <button type="submit" className="add-friend-button" style={{ width: "100%" }}>
+                {register ? "Registreren" : "Inloggen"}
+              </button>
+            </form>
+            <button
+              className="close-popup-button"
+              style={{ width: "100%", marginTop: "1rem" }}
+              onClick={() => setRegister(!register)}
+            >
+              {register ? "Heb je al een account? Inloggen" : "Nog geen account? Registreren"}
+            </button>
+            <button
+              type="button"
+              className="google-login-button"
+              onClick={handleGoogleLogin}
+              style={{ width: "100%", marginTop: "1rem" }}
+            >
+              <img
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                alt="Google"
+                style={{ width: 20, marginRight: 8, verticalAlign: "middle" }}
+              />
+              Inloggen met Google
+            </button>
+            {error && <div className="error-message">{error}</div>}
+          </>
+        )}
+      </div>
     </div>
   );
 }
