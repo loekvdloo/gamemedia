@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getDocs, updateDoc, collection, doc } from "firebase/firestore";
+import { getDocs, updateDoc, collection, doc, getDoc } from "firebase/firestore";
 import { db } from "./config/firebase";
 import { getAuth } from "firebase/auth";
 import './GameMedia.css'; // Import the GameMedia.css file
@@ -9,6 +9,8 @@ function HomePage() {
   const [filteredTaskList, setFilteredTaskList] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [mostLikedPost, setMostLikedPost] = useState(null);
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const auth = getAuth();
   const user = auth.currentUser;
 
@@ -30,6 +32,60 @@ function HomePage() {
 
     getTasks();
   }, []);
+
+  const handleAddFriend = async (friendUid) => {
+    if (!friendUid) {
+      alert("Geen geldige gebruiker geselecteerd!");
+      return;
+    }
+
+    const userDoc = doc(db, "Users", user.uid); // Document van de huidige gebruiker
+    try {
+      const userSnapshot = await getDoc(userDoc);
+
+      if (!userSnapshot.exists()) {
+        alert("Gebruikersdocument niet gevonden!");
+        return;
+      }
+
+      const userData = userSnapshot.data();
+
+      // Controleer of de vriend al is toegevoegd
+      if (userData.friends?.includes(friendUid)) {
+        alert("Deze gebruiker is al een vriend!");
+        return;
+      }
+
+      // Voeg de vriend toe aan de 'friends'-array
+      const updatedFriends = [...(userData.friends || []), friendUid];
+      await updateDoc(userDoc, { friends: updatedFriends });
+
+      alert("Vriend succesvol toegevoegd!");
+    } catch (error) {
+      console.error("Error bij het toevoegen van vriend:", error.message);
+      alert("Er is een fout opgetreden bij het toevoegen van de vriend.");
+    }
+  };
+
+  const handleProfileClick = async (userId) => {
+    console.log("Fetching profile for userId:", userId); // Controleer de userId
+
+    try {
+      const userDoc = doc(db, "Users", userId);
+      const userSnapshot = await getDoc(userDoc);
+
+      if (userSnapshot.exists()) {
+        console.log("Profile data:", userSnapshot.data()); // Controleer de profielgegevens
+        setSelectedProfile(userSnapshot.data());
+        setShowProfilePopup(true);
+      } else {
+        console.error("Profiel niet gevonden voor userId:", userId);
+        alert("Profiel niet gevonden!");
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error.message);
+    }
+  };
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -187,7 +243,15 @@ function HomePage() {
           {task.imageUrl && (
             <img src={task.imageUrl} alt="taak" className="post-image" />
           )}
-          <p className="post-author">Geplaatst door: {task.userEmail}</p>
+          <p className="post-author">
+            Geplaatst door: 
+            <button
+              onClick={() => handleProfileClick(task.userId)}
+              className="profile-button"
+            >
+              {task.userEmail} (Profiel bekijken)
+            </button>
+          </p>
           <p className="post-likes">
             Likes: {task.likes || 0}{" "}
             <button
@@ -230,6 +294,29 @@ function HomePage() {
           </div>
         </div>
       ))}
+
+      {/* Profile Popup */}
+      {showProfilePopup && selectedProfile && (
+        <div className="profile-popup">
+          <div className="profile-popup-content">
+            <h2>Profiel</h2>
+            <p><strong>Naam:</strong> {selectedProfile.name}</p>
+            <p><strong>Email:</strong> {selectedProfile.email}</p>
+            <button
+              onClick={() => handleAddFriend(selectedProfile.uid)}
+              className="add-friend-button"
+            >
+              Voeg toe als vriend
+            </button>
+            <button
+              onClick={() => setShowProfilePopup(false)}
+              className="close-popup-button"
+            >
+              Sluiten
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -130,3 +130,18 @@ body {
   margin-top: 2rem;
   border-top: 3px solid #e94560;
 }
+
+.profile-button {
+  background-color: #0f3460;
+  color: #eaeaea;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.3s;
+}
+
+.profile-button:hover {
+  background-color: #e94560;
+}
