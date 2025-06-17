@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { getDocs, updateDoc, collection, doc, getDoc, writeBatch, arrayUnion } from "firebase/firestore";
+import {
+  getDocs,
+  updateDoc,
+  collection,
+  doc,
+  getDoc,
+  writeBatch,
+  arrayUnion,
+} from "firebase/firestore";
 import { db } from "./config/firebase";
 import { getAuth } from "firebase/auth";
-import './GameMedia.css';
+import "./GameMedia.css";
 
 function HomePage() {
   const [taskList, setTaskList] = useState([]);
@@ -71,7 +79,9 @@ function HomePage() {
         await updateDoc(friendRef, {
           friendRequests: arrayUnion(user.uid),
         });
-        alert("Vriendschapsverzoek verstuurd! Wacht tot deze geaccepteerd wordt.");
+        alert(
+          "Vriendschapsverzoek verstuurd! Wacht tot deze geaccepteerd wordt."
+        );
       } else {
         // Direct vrienden worden
         const batch = writeBatch(db);
@@ -105,7 +115,9 @@ function HomePage() {
           getDoc(doc(db, "Users", friendUid))
         );
         const friendSnaps = await Promise.all(friendPromises);
-        setFriendsList(friendSnaps.filter(snap => snap.exists()).map(snap => snap.data()));
+        setFriendsList(
+          friendSnaps.filter((snap) => snap.exists()).map((snap) => snap.data())
+        );
       } else {
         setFriendsList([]);
       }
@@ -198,7 +210,10 @@ function HomePage() {
       return;
     }
 
-    const updatedComments = [...(task.comments || []), { text: comment, likes: 0 }];
+    const updatedComments = [
+      ...(task.comments || []),
+      { text: comment, likes: 0 },
+    ];
 
     try {
       await updateDoc(taskDoc, { comments: updatedComments });
@@ -229,7 +244,9 @@ function HomePage() {
     }
 
     const updatedComments = task.comments.map((comment, index) =>
-      index === commentIndex ? { ...comment, likes: comment.likes + 1 } : comment
+      index === commentIndex
+        ? { ...comment, likes: comment.likes + 1 }
+        : comment
     );
 
     try {
@@ -258,7 +275,11 @@ function HomePage() {
     const friendSnap = await getDoc(friendRef);
     if (friendSnap.exists()) {
       const friendData = friendSnap.data();
-      setPendingFriend({ uid: friendUid, name: friendData.name, private: friendData.private });
+      setPendingFriend({
+        uid: friendUid,
+        name: friendData.name,
+        private: friendData.private,
+      });
       setShowAddFriendPopup(true);
     } else {
       alert("Gebruiker niet gevonden!");
@@ -273,13 +294,15 @@ function HomePage() {
       </header>
 
       <div className="search-bar">
-        <input
-          type="text"
-          placeholder="Zoek op titel van post"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="search-input"
-        />
+        <form action="/search.php" method="get">
+          <input
+            type="text"
+            placeholder="Zoek op titel van post"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            style={{ marginBottom: 20, padding: 5, width: "100%" }}
+          />
+        </form>
       </div>
 
       {mostLikedPost && (
@@ -295,7 +318,9 @@ function HomePage() {
               className="post-image"
             />
           )}
-          <p className="post-author">Geplaatst door: {mostLikedPost.userEmail}</p>
+          <p className="post-author">
+            Geplaatst door: {mostLikedPost.userEmail}
+          </p>
           <p className="post-likes">Likes: {mostLikedPost.likes || 0}</p>
         </div>
       )}
@@ -368,8 +393,12 @@ function HomePage() {
         <div className="profile-popup">
           <div className="profile-popup-content">
             <h2>Profiel</h2>
-            <p><strong>Naam:</strong> {selectedProfile.name}</p>
-            <p><strong>Email:</strong> {selectedProfile.email}</p>
+            <p>
+              <strong>Naam:</strong> {selectedProfile.name}
+            </p>
+            <p>
+              <strong>Email:</strong> {selectedProfile.email}
+            </p>
             {/* Alleen vriendenlijst tonen op eigen profiel */}
             {myProfile && (
               <div className="friends-list">
@@ -389,7 +418,10 @@ function HomePage() {
             {!myProfile && (
               <button
                 onClick={() => {
-                  setPendingFriend({ uid: selectedProfile.uid, private: selectedProfile.private });
+                  setPendingFriend({
+                    uid: selectedProfile.uid,
+                    private: selectedProfile.private,
+                  });
                   setShowAddFriendPopup(true);
                 }}
                 className="add-friend-button"
