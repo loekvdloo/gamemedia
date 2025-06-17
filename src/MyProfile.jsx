@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   getDocs,
   deleteDoc,
@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./config/firebase";
 import { getAuth } from "firebase/auth";
+import { supabase } from "./config/supabase";
 
 function MyProfile() {
   const [taskList, setTaskList] = useState([]);
@@ -27,6 +28,7 @@ function MyProfile() {
 
   const auth = getAuth();
   const user = auth.currentUser;
+  const fileInputRef = useRef(null);
 
   const taskCollectionRef = collection(db, "Task");
   const userProfileDocRef = doc(db, "UserProfiles", user?.uid);
@@ -174,25 +176,45 @@ function MyProfile() {
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <p><strong>Naam:</strong> {userName}</p>
         {profileImage ? (
-          <img
-            src={profileImage}
-            alt="Profiel"
-            style={{
-              width: 150,
-              height: 150,
-              border: "5px solid white",
-              borderRadius: "50%",
-              objectFit: "cover",
+          <>
+            <img
+              src={profileImage}
+              alt="Profiel"
+              style={{
+                width: 150,
+                height: 150,
+                border: "5px solid white",
+                borderRadius: "50%",
+                objectFit: "cover",
             }}
-          />
+            />
+            <div style={{ marginTop: 10 }}>
+              <button onClick={() => fileInputRef.current.click()}>
+                Verander profielfoto
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  handleProfileImageUpload(e.target.files[0])
+                }
+                style={{ display: "none" }}
+              />
+            </div>
+          </>
         ) : (
-          <p>Geen profielafbeelding</p>
+          <>
+            <p>Geen profielafbeelding</p>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                handleProfileImageUpload(e.target.files[0])
+              }
+            />
+          </>
         )}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleProfileImageUpload(e.target.files[0])}
-        />
       </div>
 
       <h2>Jouw berichten</h2>
