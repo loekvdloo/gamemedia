@@ -1,0 +1,136 @@
+/* Algemene instellingen */
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #1a1a2e;
+  color: #eaeaea;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Header */
+.header {
+  background-color: #0f3460;
+  color: #eaeaea;
+  padding: 1.5rem;
+  text-align: center;
+  border-bottom: 3px solid #e94560;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  margin: 0;
+  color: #e94560;
+  text-shadow: 0 0 10px #e94560, 0 0 20px #e94560;
+}
+
+.header p {
+  font-size: 1.2rem;
+  margin-top: 0.5rem;
+  color: #a8a8d1;
+}
+
+/* Post Frame */
+.post-frame {
+  background-color: #16213e;
+  border: 2px solid #e94560;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.post-frame:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.7);
+}
+
+.post-frame img {
+  max-width: 100%;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.post-frame h3 {
+  font-size: 1.8rem;
+  color: #e94560;
+  margin-bottom: 0.5rem;
+}
+
+.post-frame p {
+  font-size: 1rem;
+  color: #a8a8d1;
+  margin-bottom: 1rem;
+}
+
+.post-frame .post-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.post-frame .post-actions button {
+  background-color: #e94560;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+}
+
+.post-frame .post-actions button:hover {
+  background-color: #ff5e78;
+}
+
+/* Comments Section */
+.comments-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #a8a8d1;
+}
+
+.comments-section h4 {
+  font-size: 1.2rem;
+  color: #e94560;
+  margin-bottom: 0.5rem;
+}
+
+.comments-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.comments-section li {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #a8a8d1;
+}
+
+.comments-section input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #a8a8d1;
+  border-radius: 5px;
+  background-color: #1a1a2e;
+  color: #eaeaea;
+  margin-top: 0.5rem;
+}
+
+/* Footer */
+.footer {
+  background-color: #0f3460;
+  color: #a8a8d1;
+  text-align: center;
+  padding: 1rem;
+  margin-top: 2rem;
+  border-top: 3px solid #e94560;
+}

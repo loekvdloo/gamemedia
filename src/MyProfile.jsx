@@ -32,18 +32,27 @@ function MyProfile() {
   const userProfileDocRef = doc(db, "UserProfiles", user?.uid);
 
   const getTasks = async () => {
-    const data = await getDocs(taskCollectionRef);
-    const allTasks = data.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
-    const userTasks = allTasks.filter((task) => task.userId === user?.uid);
-    setTaskList(userTasks);
+    try {
+      const data = await getDocs(taskCollectionRef);
+      const allTasks = data.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+      const userTasks = allTasks.filter((task) => task.userId === user?.uid);
+      setTaskList(userTasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error.message);
+    }
   };
 
   const getUserName = async () => {
-    const docSnap = await getDoc(userProfileDocRef);
-    if (docSnap.exists()) {
-      setUserName(docSnap.data().name || "Onbekende gebruiker");
-    } else {
-      setUserName(user.displayName || "Onbekende gebruiker");
+    try {
+      const docSnap = await getDoc(userProfileDocRef);
+      if (docSnap.exists()) {
+        setUserName(docSnap.data().name || "Onbekende gebruiker");
+        setProfileImage(docSnap.data().profileImageUrl || null);
+      } else {
+        setUserName(user.displayName || "Onbekende gebruiker");
+      }
+    } catch (error) {
+      console.error("Error fetching user name:", error.message);
     }
   };
 
@@ -75,7 +84,14 @@ function MyProfile() {
 
   const handleProfileImageUpload = async (file) => {
     const imageUrl = await uploadImageToSupabase(file);
-    setProfileImage(imageUrl);
+    if (imageUrl) {
+      try {
+        await setDoc(userProfileDocRef, { profileImageUrl: imageUrl }, { merge: true });
+        setProfileImage(imageUrl);
+      } catch (error) {
+        console.error("Error updating profile image:", error.message);
+      }
+    }
   };
 
   const addTask = async () => {
@@ -84,22 +100,31 @@ function MyProfile() {
       imageUrl = await uploadImageToSupabase(newImage);
     }
 
-    await addDoc(taskCollectionRef, {
-      name: newTask,
-      imageUrl: imageUrl || "",
-      userId: user.uid,
-      userEmail: user.email,
-    });
+    try {
+      await addDoc(taskCollectionRef, {
+        name: newTask,
+        imageUrl: imageUrl || "",
+        userId: user.uid,
+        userEmail: user.email,
+        private: false,
+      });
 
-    setNewTask("");
-    setNewImage(null);
-    setFileInputKey(Date.now());
-    getTasks();
+      setNewTask("");
+      setNewImage(null);
+      setFileInputKey(Date.now());
+      getTasks();
+    } catch (error) {
+      console.error("Error adding task:", error.message);
+    }
   };
 
   const deleteTask = async (id) => {
-    await deleteDoc(doc(db, "Task", id));
-    getTasks();
+    try {
+      await deleteDoc(doc(db, "Task", id));
+      getTasks();
+    } catch (error) {
+      console.error("Error deleting task:", error.message);
+    }
   };
 
   const updateTask = async () => {
@@ -113,16 +138,34 @@ function MyProfile() {
       imageUrl = existingTask?.imageUrl || "";
     }
 
-    await updateDoc(taskDoc, {
-      name: editTaskName,
-      imageUrl: imageUrl,
-    });
+    try {
+      await updateDoc(taskDoc, {
+        name: editTaskName,
+        imageUrl: imageUrl,
+      });
 
-    setEditTaskId(null);
-    setEditTaskName("");
-    setEditTaskImage(null);
-    setEditFileInputKey(Date.now());
-    getTasks();
+      setEditTaskId(null);
+      setEditTaskName("");
+      setEditTaskImage(null);
+      setEditFileInputKey(Date.now());
+      getTasks();
+    } catch (error) {
+      console.error("Error updating task:", error.message);
+    }
+  };
+
+  const togglePrivateStatus = async (taskId, currentStatus) => {
+    const taskDoc = doc(db, "Task", taskId);
+    try {
+      await updateDoc(taskDoc, { private: !currentStatus });
+      setTaskList((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === taskId ? { ...task, private: !currentStatus } : task
+        )
+      );
+    } catch (error) {
+      console.error("Error updating private status:", error.message);
+    }
   };
 
   return (
@@ -207,10 +250,16 @@ function MyProfile() {
                   style={{
                     width: 100,
                     border: "5px solid white",
-                    borderRadius: "50%", // Optional: Makes the image circular
+                    borderRadius: "50%",
                   }}
                 />
               )}
+              <p>Status: {task.private ? "Privé" : "Openbaar"}</p>
+              <button
+                onClick={() => togglePrivateStatus(task.id, task.private)}
+              >
+                {task.private ? "Maak Openbaar" : "Maak Privé"}
+              </button>
               <button
                 onClick={() => {
                   setEditTaskId(task.id);
